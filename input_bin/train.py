@@ -90,9 +90,9 @@ if __name__ == '__main__':
     dataset_train = ImageNetFeat(root=os.path.join(opts.root, "train/"))
     dataset_test = ImageNetFeat(root=os.path.join(opts.root, "test/"))
 
-    train_loader = ImagenetLoader(dataset_train, batch_size=opts.batch_size, shuffle=True, opt=opts,
+    train_loader = ImagenetLoader(dataset_train, batch_size=opts.batch_size, shuffle=False, opt=opts,
                                   batches_per_epoch=opts.batches_per_epoch, seed=None)
-    validation_loader = ImagenetLoader(dataset_test, opt=opts, batch_size=opts.batch_size,
+    validation_loader = ImagenetLoader(dataset_test, opt=opts, batch_size=opts.batch_size, shuffle=False,
                                        batches_per_epoch=opts.batches_per_epoch,
                                        seed=None)
     #print(train_loader)
