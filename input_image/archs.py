@@ -18,44 +18,51 @@ class InformedSender(nn.Module):
         self.vocab_size = vocab_size
         self.temp = temp
 
-        self.lin1 = nn.Linear(feat_size, embedding_size, bias=False)
+        self.lin1 = nn.Linear(feat_size, embedding_size, bias=True)
         self.conv2 = nn.Conv2d(1, hidden_size,
                                kernel_size=(game_size, 1),
-                               stride=(game_size, 1), bias=False)
+                               stride=(game_size, 1), bias=True)
         self.conv3 = nn.Conv2d(1, 1,
                                kernel_size=(hidden_size, 1),
-                               stride=(hidden_size, 1), bias=False)
-        self.lin4 = nn.Linear(embedding_size, vocab_size, bias=False)
+                               stride=(hidden_size, 1), bias=True)
+        self.lin4 = nn.Linear(embedding_size, vocab_size, bias=True)
 
         self.feat_size = feat_size
-        self.conv1_ = nn.Conv2d(3, 6, 5)
-        self.pool_ = nn.MaxPool2d(2, 2)
-        self.conv2_ = nn.Conv2d(6, 16, 5)
-        self.fc1_ = nn.Linear(16 * 5 * 5, 120)
-        self.fc2_ = nn.Linear(120, self.feat_size)
-        #self.conv2_bn_ = nn.BatchNorm2d(16)
-        #self.fc1_bn_ = nn.BatchNorm1d(120)
-        #self.fc2_bn_ = nn.BatchNorm1d(self.feat_size)
-        #self.fc3_ = nn.Linear(84, 10)
 
-    def forward(self, x, return_embeddings=False):
-        #print(x.shape)
-        #x = x.transpose(2, 4)
+        self.conv_block = nn.Sequential(
+            nn.Conv2d(3, 16, kernel_size=5, padding=0), # 28
+            nn.BatchNorm2d(16, eps=1e-4, momentum=0.1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2, 2), # 14
+
+            nn.Conv2d(16, 16, kernel_size=3, padding=0), # 12
+            nn.BatchNorm2d(16, eps=1e-4, momentum=0.1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2, 2), # 6
+
+            nn.Conv2d(16, 16, kernel_size=3, padding=0), # 4
+            nn.BatchNorm2d(16, eps=1e-4, momentum=0.1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2, 2), # 2
+        )
+
+        self.fc_block = nn.Sequential(
+            nn.Linear(16 * 2 * 2, self.feat_size),
+            nn.BatchNorm1d(self.feat_size),
+            nn.ReLU(inplace=True),
+        )
+        self.binarize = torch.sign
+
+    def forward(self, x):#, return_embeddings=False):
+        
         x = x.view(-1, 3, 32, 32)
-        x = self.pool_(F.relu(self.conv1_(x)))
-        x = self.pool_(F.relu(self.conv2_(x)))
-        #x = self.pool_(F.relu(self.conv2_bn_(self.conv2_(x))))
-        x = x.view(-1, 16 * 5 * 5)
-        x = F.relu(self.fc1_(x)) #relu
-        #x = F.relu(self.fc1_bn_(self.fc1_(x))) 
-        x = F.relu(self.fc2_(x)) #relu
-        #x = torch.sign(self.fc2_bn_(self.fc2_(x)))
-        #x = self.fc3(x)
-        #print(x.shape)
+        x = self.conv_block(x)
+        x = x.view(-1, 16 * 2 * 2)
+        x = self.fc_block(x)
+        x = self.binarize(x)
         x = x.view(self.game_size, -1, self.feat_size)
         #x = x.view(self.game_size, x.shape[1], -1)
         #print(x.shape)
-        #1/0
         emb = self.return_embeddings(x)
 
         # in: h of size (batch_size, 1, game_size, embedding_size)
@@ -104,34 +111,42 @@ class Receiver(nn.Module):
         self.game_size = game_size
         self.embedding_size = embedding_size
 
-        self.lin1 = nn.Linear(feat_size, embedding_size, bias=False)
+        self.lin1 = nn.Linear(feat_size, embedding_size, bias=True)
         if reinforce:
             self.lin2 = nn.Embedding(vocab_size, embedding_size)
         else:
-            self.lin2 = nn.Linear(vocab_size, embedding_size, bias=False)
+            self.lin2 = nn.Linear(vocab_size, embedding_size, bias=True)
 
         self.feat_size = feat_size
-        self.conv1_ = nn.Conv2d(3, 6, 5)
-        self.pool_ = nn.MaxPool2d(2, 2)
-        self.conv2_ = nn.Conv2d(6, 16, 5)
-        self.fc1_ = nn.Linear(16 * 5 * 5, 120)
-        self.fc2_ = nn.Linear(120, self.feat_size)
-        #self.conv2_bn_ = nn.BatchNorm2d(16)
-        #self.fc1_bn_ = nn.BatchNorm1d(120)
-        #self.fc2_bn_ = nn.BatchNorm1d(self.feat_size)
+        self.conv_block = nn.Sequential(
+            nn.Conv2d(3, 16, kernel_size=5, padding=0), # 28
+            nn.BatchNorm2d(16, eps=1e-4, momentum=0.1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2, 2), # 14
+
+            nn.Conv2d(16, 16, kernel_size=3, padding=0), # 12
+            nn.BatchNorm2d(16, eps=1e-4, momentum=0.1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2, 2), # 6
+
+            nn.Conv2d(16, 16, kernel_size=3, padding=0), # 4
+            nn.BatchNorm2d(16, eps=1e-4, momentum=0.1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2, 2), # 2
+        )
+        self.fc_block = nn.Sequential(
+            nn.Linear(16 * 2 * 2, self.feat_size),
+            nn.BatchNorm1d(self.feat_size),
+            nn.ReLU(inplace=True),
+        )
+        self.binarize = torch.sign
 
     def forward(self, signal, x):
-        #x = x.transpose(2, 4)
         x = x.view(-1, 3, 32, 32)
-        x = self.pool_(F.relu(self.conv1_(x)))
-        x = self.pool_(F.relu(self.conv2_(x)))
-        #x = self.pool_(F.relu(self.conv2_bn_(self.conv2_(x))))
-        x = x.view(-1, 16 * 5 * 5)
-        x = F.relu(self.fc1_(x)) #relu
-        #x = F.relu(self.fc1_bn_(self.fc1_(x)))
-        x = F.relu(self.fc2_(x)) #relu
-        #x = torch.sign(self.fc2_bn_(self.fc2_(x)))
-        #x = self.fc3(x)
+        x = self.conv_block(x)
+        x = x.view(-1, 16 * 2 * 2)
+        x = self.fc_block(x)
+        x = self.binarize(x)
         x = x.view(self.game_size, -1, self.feat_size)
         #x = x.view(self.game_size, x.shape[1], -1)
         #print(x.shape)
